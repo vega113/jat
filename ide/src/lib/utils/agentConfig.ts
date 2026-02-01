@@ -493,29 +493,6 @@ export function getAgentStatus(agent: AgentProgram): AgentStatus {
 	let authConfigured: boolean;
 	let statusMessage: string;
 
-	// Subscription-based agents: treat CLI availability as auth configured.
-	if (agent.authType === 'subscription') {
-		authConfigured = commandAvailable;
-
-		if (!agent.enabled) {
-			statusMessage = 'Disabled';
-		} else if (!commandAvailable) {
-			statusMessage = `Command '${agent.command}' not found`;
-		} else {
-			statusMessage = 'Available';
-		}
-
-		const available = agent.enabled && commandAvailable && authConfigured;
-		return {
-			agentId: agent.id,
-			enabled: agent.enabled,
-			commandAvailable,
-			authConfigured,
-			available,
-			statusMessage
-		};
-	}
-
 	if (agent.command === 'opencode') {
 		// OpenCode uses OAuth auth via 'opencode auth login'
 		const provider = agent.apiKeyProvider || 'anthropic';
@@ -536,7 +513,7 @@ export function getAgentStatus(agent: AgentProgram): AgentStatus {
 		// Codex uses ~/.codex/auth.json or OPENAI_API_KEY
 		const codexAuth = isCodexAuthConfigured();
 
-		authConfigured = codexAuth.configured;
+		authConfigured = codexAuth.configured || (agent.authType === 'subscription' && commandAvailable);
 
 		if (!agent.enabled) {
 			statusMessage = 'Disabled';
@@ -551,7 +528,7 @@ export function getAgentStatus(agent: AgentProgram): AgentStatus {
 		// Gemini CLI uses ~/.gemini/settings.json or GEMINI_API_KEY
 		const geminiAuth = isGeminiCliAuthConfigured();
 
-		authConfigured = geminiAuth.configured;
+		authConfigured = geminiAuth.configured || (agent.authType === 'subscription' && commandAvailable);
 
 		if (!agent.enabled) {
 			statusMessage = 'Disabled';
@@ -564,6 +541,9 @@ export function getAgentStatus(agent: AgentProgram): AgentStatus {
 		}
 	} else {
 		authConfigured = isAuthConfigured(agent);
+		if (!authConfigured && agent.authType === 'subscription' && commandAvailable) {
+			authConfigured = true;
+		}
 
 		if (!agent.enabled) {
 			statusMessage = 'Disabled';
