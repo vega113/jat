@@ -128,13 +128,12 @@
 		newSessionLoading = true;
 		showSessionDropdown = false;
 		try {
-			const projectPath = `/home/jw/code/${projectName}`;
 			const response = await fetch("/api/work/spawn", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					attach: true,
-					project: projectPath,
+					project: projectName,
 				}),
 			});
 			const data = await response.json();

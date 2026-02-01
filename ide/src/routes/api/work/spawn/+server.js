@@ -16,7 +16,7 @@
  * - agentId: Agent program to use (optional - if omitted, uses routing rules or fallback)
  * - model: Model to use (optional - if omitted, uses agent default or routing rule override)
  * - attach: If true, immediately open terminal attached to session (default: false)
- * - project: Project name (optional - inferred from taskId if not provided)
+ * - project: Project name or path (optional - inferred from taskId if not provided)
  * - imagePath: Path to image to send after startup (optional)
  */
 
@@ -24,6 +24,8 @@ import { json } from '@sveltejs/kit';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { resolve } from 'path';
+import { homedir } from 'os';
 import Database from 'better-sqlite3';
 import {
 	DEFAULT_MODEL,
@@ -81,6 +83,31 @@ const NOUNS = [
 	// Geological (8)
 	'Stone', 'Rock', 'Boulder', 'Pebble', 'Sand', 'Clay', 'Slate', 'Granite'
 ];
+
+/**
+ * Resolve a project input that might be a path or a name.
+ * Returns a filesystem path if the input looks like a path, otherwise null.
+ * @param {string} value
+ * @returns {string|null}
+ */
+function resolveProjectInput(value) {
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+
+	const isPathLike =
+		trimmed.includes('/') ||
+		trimmed.startsWith('~') ||
+		trimmed.startsWith('./') ||
+		trimmed.startsWith('../');
+
+	if (!isPathLike) return null;
+
+	const expanded = trimmed.startsWith('~')
+		? `${homedir()}${trimmed.slice(1)}`
+		: trimmed;
+
+	return resolve(expanded);
+}
 
 /**
  * Get existing agent names from database for collision checking
@@ -516,7 +543,7 @@ export async function POST({ request }) {
 		// model is optional - if omitted, uses agent default or routing rule override
 		// taskId is optional - if not provided, creates a planning session
 		// imagePath is optional - if provided, will be sent to the session after startup
-		// project is optional - if provided, use that path; otherwise infer from task ID prefix
+		// project is optional - if provided, use name or path; otherwise infer from task ID prefix
 
 		// Determine project path:
 		// 1. If explicit project provided, look it up in JAT config
@@ -526,10 +553,17 @@ export async function POST({ request }) {
 		let inferredFromTaskId = false;
 
 		if (project) {
-			// Explicit project provided - look up its path
-			const projectInfo = await getProjectPath(project);
-			if (projectInfo.exists) {
-				projectPath = projectInfo.path;
+			// Explicit project provided - may be a name or a path
+			const projectInput = String(project);
+			const explicitPath = resolveProjectInput(projectInput);
+			if (explicitPath) {
+				projectPath = explicitPath;
+			} else {
+				// Look up project path from JAT config (supports custom paths)
+				const projectInfo = await getProjectPath(projectInput);
+				if (projectInfo.exists) {
+					projectPath = projectInfo.path;
+				}
 			}
 		}
 

@@ -226,16 +226,12 @@
 		spawningSession = true;
 		error = null;
 		try {
-			// Find the project's path
-			const project = projectsWithPorts.find((p) => p.key === projectKey);
-			const projectPath = project?.path || `/home/jw/code/${projectKey}`;
-
 			const response = await fetch("/api/work/spawn", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					attach: true,
-					project: projectPath,
+					project: projectKey,
 				}),
 			});
 			const data = await response.json();
