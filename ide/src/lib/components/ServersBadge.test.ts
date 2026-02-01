@@ -165,51 +165,51 @@ function groupSessionsByProject(
 describe('ServersBadge Spawn API Call', () => {
 	beforeEach(resetMocks);
 
-it('should call spawn API with correct project key', async () => {
-	mockFetch.mockResolvedValue({
-		ok: true,
-		json: () => Promise.resolve(MOCK_SPAWN_RESPONSE_JAT)
-	});
+	it('should call spawn API with correct project key', async () => {
+		mockFetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(MOCK_SPAWN_RESPONSE_JAT)
+		});
 
-	await simulateSpawnSession('jat');
+		await simulateSpawnSession('jat');
 
 		expect(mockFetch).toHaveBeenCalledTimes(1);
-	expect(mockFetch).toHaveBeenCalledWith('/api/work/spawn', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			attach: true,
-			project: 'jat'
-		})
-	});
-});
-
-it('should pass project key for known projects', async () => {
-	mockFetch.mockResolvedValue({
-		ok: true,
-		json: () => Promise.resolve(MOCK_SPAWN_RESPONSE_CHIMARO)
-	});
-
-	await simulateSpawnSession('chimaro');
-
-	const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-	expect(callBody.project).toBe('chimaro');
-});
-
-it('should pass through unknown project keys', async () => {
-	mockFetch.mockResolvedValue({
-		ok: true,
-		json: () =>
-			Promise.resolve({
-				session: { sessionName: 'jat-Agent', project: 'unknown-project' }
+		expect(mockFetch).toHaveBeenCalledWith('/api/work/spawn', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				attach: true,
+				project: 'jat'
 			})
+		});
 	});
 
-	await simulateSpawnSession('unknown-project');
+	it('should pass project key for known projects', async () => {
+		mockFetch.mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(MOCK_SPAWN_RESPONSE_CHIMARO)
+		});
 
-	const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-	expect(callBody.project).toBe('unknown-project');
-});
+		await simulateSpawnSession('chimaro');
+
+		const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+		expect(callBody.project).toBe('chimaro');
+	});
+
+	it('should pass through unknown project keys', async () => {
+		mockFetch.mockResolvedValue({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					session: { sessionName: 'jat-Agent', project: 'unknown-project' }
+				})
+		});
+
+		await simulateSpawnSession('unknown-project');
+
+		const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+		expect(callBody.project).toBe('unknown-project');
+	});
 
 	it('should return session with project field set', async () => {
 		mockFetch.mockResolvedValue({

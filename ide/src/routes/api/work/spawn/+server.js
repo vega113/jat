@@ -110,6 +110,16 @@ function resolveProjectInput(value) {
 }
 
 /**
+ * Escape a string for safe use in shell commands (single-quoted).
+ * @param {string} str
+ * @returns {string}
+ */
+function shellEscape(str) {
+	if (!str) return "''";
+	return "'" + str.replace(/'/g, "'\\''") + "'";
+}
+
+/**
  * Get existing agent names from database for collision checking
  * @returns {Set<string>} Set of existing agent names (lowercase)
  */
@@ -406,11 +416,11 @@ function buildAgentCommand({ agent, model, projectPath, jatDefaults, agentName, 
 
 	// Build command based on agent configuration
 	// Default pattern: {command} --model {model} {flags}
-	let cmdParts = [`cd "${projectPath}"`];
+	let cmdParts = [`cd ${shellEscape(projectPath)}`];
 
 	// Add environment variables
 	for (const [key, value] of Object.entries(env)) {
-		cmdParts.push(`${key}="${value}"`);
+		cmdParts.push(`${key}=${shellEscape(value)}`);
 	}
 
 	// Use custom startup pattern if defined, otherwise build default
@@ -538,6 +548,8 @@ export async function POST({ request }) {
 			project = null,
 			mode = 'task'
 		} = body;
+		const explicitProjectProvided =
+			project !== null && project !== undefined && String(project).trim() !== '';
 
 		// agentId is optional - if omitted, uses routing rules or fallback
 		// model is optional - if omitted, uses agent default or routing rule override
@@ -552,7 +564,7 @@ export async function POST({ request }) {
 		let projectPath = null;
 		let inferredFromTaskId = false;
 
-		if (project) {
+		if (explicitProjectProvided) {
 			// Explicit project provided - may be a name or a path
 			const projectInput = String(project);
 			const explicitPath = resolveProjectInput(projectInput);
@@ -565,6 +577,14 @@ export async function POST({ request }) {
 					projectPath = projectInfo.path;
 				}
 			}
+		}
+
+		if (explicitProjectProvided && !projectPath) {
+			return json({
+				error: 'Project not found',
+				message: `Project '${String(project)}' not found in JAT config`,
+				project: String(project)
+			}, { status: 400 });
 		}
 
 		if (!projectPath && taskId) {
@@ -729,7 +749,11 @@ export async function POST({ request }) {
 		// Without -x and -y, tmux uses default 80x24 which may not match IDE card width
 		// Use sleep to allow shell to initialize before sending keys - without this delay,
 		// the shell may not be ready and keys are lost (race condition)
-		const createSessionCmd = `tmux new-session -d -s "${sessionName}" -x ${TMUX_INITIAL_WIDTH} -y ${TMUX_INITIAL_HEIGHT} -c "${projectPath}" && sleep 0.3 && tmux send-keys -t "${sessionName}" "${agentCmd}" Enter`;
+		const escapedSessionName = shellEscape(sessionName);
+		const escapedProjectPath = shellEscape(projectPath);
+		const escapedAgentCmd = shellEscape(agentCmd);
+
+		const createSessionCmd = `tmux new-session -d -s ${escapedSessionName} -x ${TMUX_INITIAL_WIDTH} -y ${TMUX_INITIAL_HEIGHT} -c ${escapedProjectPath} && sleep 0.3 && tmux send-keys -t ${escapedSessionName} ${escapedAgentCmd} Enter`;
 
 		try {
 			await execAsync(createSessionCmd);
