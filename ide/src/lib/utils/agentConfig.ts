@@ -296,7 +296,12 @@ export function isAuthConfigured(agent: AgentProgram): boolean {
 			// Claude Code uses ~/.claude/.credentials.json
 			if (agent.command === 'claude') {
 				const claudeCredsFile = join(homedir(), '.claude', '.credentials.json');
-				return existsSync(claudeCredsFile);
+				if (existsSync(claudeCredsFile)) {
+					return true;
+				}
+				// Claude Code may store auth outside the credentials file (e.g., keychain).
+				// Fall back to command availability to avoid false negatives.
+				return isCommandAvailable(agent.command);
 			}
 			// For other subscription-based CLIs, assume configured if command exists
 			return isCommandAvailable(agent.command);
