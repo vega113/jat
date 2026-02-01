@@ -51,57 +51,117 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# macOS ships with Bash 3.2, so avoid ${var^^} syntax.
+to_upper() {
+    printf '%s' "$1" | tr '[:lower:]' '[:upper:]'
+}
+
 # Detect platform
 IS_MACOS=false
 [[ "$(uname)" == "Darwin" ]] && IS_MACOS=true
 
-# Default terminal (can be overridden by env var, config file, or platform default)
-detect_default_terminal() {
-    # 1. Environment variable override
-    if [[ -n "${JAT_TERMINAL:-}" ]]; then
-        echo "$JAT_TERMINAL"
-        return
-    fi
+# Check if a terminal emulator is available on this system
+terminal_available() {
+    local term="$1"
+    case "$term" in
+        ghostty)
+            if [[ "$IS_MACOS" == "true" ]]; then
+                [[ -d "/Applications/Ghostty.app" ]] || command -v ghostty &>/dev/null
+            else
+                command -v ghostty &>/dev/null
+            fi
+            ;;
+        apple-terminal)
+            [[ "$IS_MACOS" == "true" ]]
+            ;;
+        iterm2)
+            [[ "$IS_MACOS" == "true" ]] && [[ -d "/Applications/iTerm.app" ]]
+            ;;
+        kitty)
+            command -v kitty &>/dev/null
+            ;;
+        gnome-terminal)
+            command -v gnome-terminal &>/dev/null
+            ;;
+        konsole)
+            command -v konsole &>/dev/null
+            ;;
+        xterm)
+            command -v xterm &>/dev/null
+            ;;
+        alacritty)
+            command -v alacritty &>/dev/null
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
-    # 2. Config file override (if config exists; "auto" means detect)
-    if [[ -f "$CONFIG_FILE" ]]; then
-        local config_terminal
-        config_terminal=$(jq -r '.defaults.terminal // empty' "$CONFIG_FILE" 2>/dev/null)
-        if [[ -n "$config_terminal" ]] && [[ "$config_terminal" != "auto" ]]; then
-            echo "$config_terminal"
-            return
-        fi
-    fi
-
-    # 3. Platform-aware default
+# Pick the best available terminal for the current platform
+detect_platform_terminal() {
     if [[ "$IS_MACOS" == "true" ]]; then
         # macOS: prefer Ghostty > iTerm2 > Terminal.app
-        if [[ -d "/Applications/Ghostty.app" ]]; then
+        if terminal_available ghostty; then
             echo "ghostty"
-        elif [[ -d "/Applications/iTerm.app" ]]; then
+        elif terminal_available iterm2; then
             echo "iterm2"
         else
             echo "apple-terminal"
         fi
     else
-        # Linux: prefer ghostty > alacritty > kitty > gnome-terminal > xterm
-        if command -v ghostty &>/dev/null; then
-            echo "ghostty"
-        elif command -v alacritty &>/dev/null; then
-            echo "alacritty"
-        elif command -v kitty &>/dev/null; then
-            echo "kitty"
-        elif command -v gnome-terminal &>/dev/null; then
-            echo "gnome-terminal"
-        elif command -v konsole &>/dev/null; then
-            echo "konsole"
-        else
-            echo "xterm"
-        fi
+        # Linux: prefer ghostty > alacritty > kitty > gnome-terminal > konsole > xterm
+        local term
+        for term in ghostty alacritty kitty gnome-terminal konsole xterm; do
+            if terminal_available "$term"; then
+                echo "$term"
+                return
+            fi
+        done
+        echo "xterm"
     fi
 }
 
+# Default terminal (can be overridden by env var, config file, or platform default)
+detect_default_terminal() {
+    local requested=""
+
+    # 1. Environment variable override
+    if [[ -n "${JAT_TERMINAL:-}" ]]; then
+        requested="$JAT_TERMINAL"
+    fi
+
+    # 2. Config file override (if config exists; "auto" means detect)
+    if [[ -z "$requested" ]] && [[ -f "$CONFIG_FILE" ]]; then
+        local config_terminal
+        config_terminal=$(jq -r '.defaults.terminal // empty' "$CONFIG_FILE" 2>/dev/null)
+        if [[ -n "$config_terminal" ]] && [[ "$config_terminal" != "auto" ]]; then
+            requested="$config_terminal"
+        fi
+    fi
+
+    # 3. Validate requested terminal or fall back to platform default
+    if [[ -n "$requested" ]]; then
+        if terminal_available "$requested"; then
+            echo "$requested"
+            return
+        fi
+        local fallback
+        fallback="$(detect_platform_terminal)"
+        echo -e "${YELLOW}Requested terminal '$requested' not found or unsupported; using '$fallback'.${NC}" >&2
+        echo "$fallback"
+        return
+    fi
+
+    detect_platform_terminal
+}
+
 TERMINAL="$(detect_default_terminal)"
+
+if ! terminal_available "$TERMINAL"; then
+    echo -e "${RED}No supported terminal found. Install one of: ghostty, iTerm2, Terminal.app, alacritty, kitty, gnome-terminal, konsole, xterm.${NC}" >&2
+    exit 1
+fi
 
 # Cross-platform: kill process listening on a TCP port
 kill_port_process() {
@@ -162,8 +222,12 @@ launch_terminal_window() {
         xterm)
             xterm -title "$title" -e bash -c "$cmd" &
             ;;
-        alacritty|*)
+        alacritty)
             alacritty -T "$title" -e bash -c "$cmd" &
+            ;;
+        *)
+            echo -e "${RED}Unsupported terminal '$TERMINAL'.${NC}" >&2
+            return 1
             ;;
     esac
 }
@@ -932,7 +996,7 @@ init_projects() {
         local new_project
         new_project=$(cat << EOF
 {
-  "name": "${repo_name^^}",
+  "name": "$(to_upper "$repo_name")",
   "path": "~/code/$repo_name",
   "port": ${port:-null},
   "database_url": null,
@@ -1024,13 +1088,13 @@ add_project() {
     local inactive_color="rgb($(printf '%02x%02x%02x' $((r*3/4)) $((g*3/4)) $((b*3/4))))"
 
     # Convert path back to use ~ for storage
-    local stored_path="${project_path/#$HOME/\~}"
+    local stored_path="${project_path/#$HOME/~}"
 
     # Add to config
     local new_project
     new_project=$(cat << EOF
 {
-  "name": "${project_name^^}",
+  "name": "$(to_upper "$project_name")",
   "path": "$stored_path",
   "port": ${port:-null},
   "database_url": null,
@@ -2155,8 +2219,8 @@ resume_session() {
     fi
 
     # Window title
-    local window_title="${project^^}: Claude (resumed)"
-    [[ -n "$agent_name" ]] && window_title="${project^^}: $agent_name (resumed)"
+    local window_title="$(to_upper "$project"): Claude (resumed)"
+    [[ -n "$agent_name" ]] && window_title="$(to_upper "$project"): $agent_name (resumed)"
 
     echo -e "${DIM}  → Launching Claude Code with session resume...${NC}"
 
