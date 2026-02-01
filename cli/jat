@@ -65,11 +65,7 @@ terminal_available() {
     local term="$1"
     case "$term" in
         ghostty)
-            if [[ "$IS_MACOS" == "true" ]]; then
-                [[ -d "/Applications/Ghostty.app" ]] || command -v ghostty &>/dev/null
-            else
-                command -v ghostty &>/dev/null
-            fi
+            command -v ghostty &>/dev/null
             ;;
         apple-terminal)
             [[ "$IS_MACOS" == "true" ]]
@@ -1088,7 +1084,12 @@ add_project() {
     local inactive_color="rgb($(printf '%02x%02x%02x' $((r*3/4)) $((g*3/4)) $((b*3/4))))"
 
     # Convert path back to use ~ for storage
-    local stored_path="${project_path/#$HOME/~}"
+    local stored_path="$project_path"
+    if [[ "$project_path" == "$HOME" ]]; then
+        stored_path="~"
+    elif [[ "$project_path" == "$HOME/"* ]]; then
+        stored_path="~${project_path#$HOME}"
+    fi
 
     # Add to config
     local new_project
