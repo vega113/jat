@@ -28,7 +28,7 @@ const JAT_CONFIG_PATH = join(homedir(), '.config', 'jat', 'projects.json');
  * @property {number} [agent_stagger] - Stagger delay between agent spawns (seconds)
  * @property {number} [claude_startup_timeout] - Claude startup timeout (seconds)
  * @property {number} [auto_proceed_delay] - Delay before spawning next task on auto-proceed (seconds)
- * @property {boolean} [skip_permissions] - Pass --dangerously-skip-permissions to Claude (user must accept YOLO first)
+ * @property {boolean} [skip_permissions] - Pass autonomous flags to agents (Claude: --dangerously-skip-permissions, Codex: --full-auto)
  */
 
 /**
