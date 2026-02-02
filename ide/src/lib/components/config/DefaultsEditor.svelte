@@ -630,8 +630,8 @@
 					Autonomous Mode
 				</h3>
 				<p class="section-description">
-					Enable autonomous operation by passing <code>--dangerously-skip-permissions</code> to Claude.
-					This allows agents to execute commands without confirmation prompts.
+					Enable autonomous operation by passing <code>--dangerously-skip-permissions</code> to Claude
+					and <code>--full-auto</code> to Codex. This allows agents to execute commands without confirmation prompts.
 				</p>
 
 				{#if !skipPermissions}
@@ -674,7 +674,7 @@
 					<label class="form-label toggle-label" for="skip-permissions">
 						<span class="toggle-label-text">
 							Enable autonomous mode
-							<span class="label-hint">Pass --dangerously-skip-permissions to spawned agents</span>
+							<span class="label-hint">Pass --dangerously-skip-permissions to Claude and --full-auto to Codex</span>
 							{#if savingSkipPermissions}
 								<span class="saving-indicator">Saving...</span>
 							{/if}

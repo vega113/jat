@@ -288,10 +288,13 @@ function selectAgentAndModel({ agentId, model, task }) {
 			// Check agent is available
 			const status = getAgentStatus(routingResult.agent);
 			if (!status.available) {
-				// Fall through to fallback agent
-				console.warn(
-					`[spawn] Routing selected ${routingResult.agent.id} but it's unavailable: ${status.statusMessage}`
-				);
+				const message = `Routing selected ${routingResult.agent.id} but it's unavailable: ${status.statusMessage}`;
+				// If a routing rule matched, surface the failure instead of silently falling back.
+				if (routingResult.matchedRule) {
+					return { error: message, status: 400 };
+				}
+				// Otherwise, fall through to fallback agent.
+				console.warn(`[spawn] ${message}`);
 			} else {
 				return routingResult;
 			}
@@ -413,16 +416,27 @@ function buildAgentCommand({ agent, model, projectPath, jatDefaults, agentName, 
 			agentCmd += ` --model ${model.id}`;
 		}
 
+		const agentFlags = agent.flags ?? [];
+
 		// Add configured flags
-		if (agent.flags && agent.flags.length > 0) {
-			agentCmd += ' ' + agent.flags.join(' ');
+		if (agentFlags.length > 0) {
+			agentCmd += ' ' + agentFlags.join(' ');
 		}
 
 		// For Claude Code specifically, handle skip_permissions from JAT config
 		if (agent.command === 'claude' && jatDefaults.skip_permissions) {
 			// Only add if not already in flags
-			if (!agent.flags.includes('--dangerously-skip-permissions')) {
+			if (!agentFlags.includes('--dangerously-skip-permissions')) {
 				agentCmd += ' --dangerously-skip-permissions';
+			}
+		}
+
+		// For Codex, map skip_permissions to full auto mode unless user set an approval mode already
+		if (agent.command === 'codex' && jatDefaults.skip_permissions) {
+			const codexApprovalFlags = ['--full-auto', '--auto-edit', '--suggest'];
+			const hasApprovalFlag = agentFlags.some((flag) => codexApprovalFlags.includes(flag));
+			if (!hasApprovalFlag) {
+				agentCmd += ' --full-auto';
 			}
 		}
 
