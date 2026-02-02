@@ -288,10 +288,13 @@ function selectAgentAndModel({ agentId, model, task }) {
 			// Check agent is available
 			const status = getAgentStatus(routingResult.agent);
 			if (!status.available) {
-				// Fall through to fallback agent
-				console.warn(
-					`[spawn] Routing selected ${routingResult.agent.id} but it's unavailable: ${status.statusMessage}`
-				);
+				const message = `Routing selected ${routingResult.agent.id} but it's unavailable: ${status.statusMessage}`;
+				// If a routing rule matched, surface the failure instead of silently falling back.
+				if (routingResult.matchedRule) {
+					return { error: message, status: 400 };
+				}
+				// Otherwise, fall through to fallback agent.
+				console.warn(`[spawn] ${message}`);
 			} else {
 				return routingResult;
 			}
